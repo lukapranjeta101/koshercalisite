@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
+import type { Variants } from "motion/react";
 
 const CATEGORIES = [
   "ALL",
@@ -476,7 +477,7 @@ function getShopCardImage(productId: string) {
   return SHOP_CARD_IMAGES[hash % SHOP_CARD_IMAGES.length];
 }
 
-const listVariants = {
+const listVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -484,12 +485,12 @@ const listVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 20 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.45, ease: "easeOut" },
   },
 };
 
@@ -637,7 +638,7 @@ export default function Storefront() {
         <motion.div
           initial={{ opacity: 0, y: -14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
           className="sticky top-3 z-20 mb-6 flex justify-end"
         >
           <button
@@ -652,7 +653,7 @@ export default function Storefront() {
         <motion.header
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
           className="overflow-hidden rounded-[2rem] border border-[#e5dccd] bg-white/85 shadow-[0_20px_60px_rgba(42,32,21,0.08)] backdrop-blur-md"
         >
           <div className="border-b border-[#e5dccd] bg-gradient-to-r from-[#3b342a] via-[#2c261f] to-[#1f1b16] px-5 py-5 text-white sm:px-7">
@@ -790,7 +791,7 @@ export default function Storefront() {
               initial={{ opacity: 0, y: 18 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
             >
               <div className="mb-5 flex items-end justify-between border-b border-[#dce5f2] pb-3">
                 <h3 className="text-2xl font-semibold tracking-[0.04em] text-zinc-900">{group.category}</h3>
@@ -907,7 +908,7 @@ export default function Storefront() {
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
               className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-[#e5dccd] bg-white p-5 shadow-2xl"
               onClick={(event) => event.stopPropagation()}
             >
@@ -1003,7 +1004,7 @@ export default function Storefront() {
               initial={{ opacity: 0, y: 18, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.98 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
               className="w-full max-w-lg rounded-3xl border border-[#e5dccd] bg-white p-6 shadow-[0_30px_80px_rgba(35,27,18,0.32)]"
             >
               <div className="mb-4 flex items-center justify-between border-b border-[#e5dccd] pb-3">

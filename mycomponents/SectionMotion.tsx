@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "motion/react";
+import type { Variants } from "motion/react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -14,6 +15,25 @@ type SectionRevealProps = {
 type MotionWrapProps = {
   children: ReactNode;
   className?: string;
+};
+
+const staggerGroupVariants: Variants = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.08,
+    },
+  },
+};
+
+const staggerItemVariants: Variants = {
+  hidden: { opacity: 0, y: 26 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: "easeOut" },
+  },
 };
 
 function useHydrated() {
@@ -48,7 +68,7 @@ export function SectionReveal({ children, className, id, delay = 0 }: SectionRev
       initial={{ opacity: 0, y: 42, filter: "blur(6px)" }}
       whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
       viewport={{ once: true, amount: 0.22 }}
-      transition={{ duration: 0.78, ease: [0.22, 1, 0.36, 1], delay }}
+      transition={{ duration: 0.78, ease: "easeOut", delay }}
     >
       {children}
     </motion.section>
@@ -69,15 +89,7 @@ export function StaggerGroup({ children, className }: MotionWrapProps) {
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, amount: 0.2 }}
-      variants={{
-        hidden: {},
-        show: {
-          transition: {
-            staggerChildren: 0.1,
-            delayChildren: 0.08,
-          },
-        },
-      }}
+      variants={staggerGroupVariants}
     >
       {children}
     </motion.div>
@@ -93,17 +105,7 @@ export function StaggerItem({ children, className }: MotionWrapProps) {
   }
 
   return (
-    <motion.div
-      className={className}
-      variants={{
-        hidden: { opacity: 0, y: 26 },
-        show: {
-          opacity: 1,
-          y: 0,
-          transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] },
-        },
-      }}
-    >
+    <motion.div className={className} variants={staggerItemVariants}>
       {children}
     </motion.div>
   );

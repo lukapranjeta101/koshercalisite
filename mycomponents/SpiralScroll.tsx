@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useMotionValueEvent, useScroll } from "framer-motion";
+import { useMotionValueEvent, useScroll } from "motion/react";
 
 const TOTAL_FRAMES = 101; // Editable
 const FRAME_PATH = "/mycomponents";

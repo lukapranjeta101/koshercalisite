@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import Image from "next/image";
 
 type LocationItem = {
@@ -27,7 +27,7 @@ export default function LocationsPopGrid({ locations }: LocationsPopGridProps) {
           transition={{
             duration: 0.58,
             delay: index * 0.12,
-            ease: [0.22, 1, 0.36, 1],
+            ease: "easeOut",
           }}
           className={`group relative h-[320px] overflow-hidden rounded-2xl border border-white/30 bg-zinc-200 shadow-[0_18px_50px_rgba(0,0,0,0.55)] sm:h-[460px] sm:rounded-3xl ${
             index === 0 ? "hero-float-a" : index === 1 ? "hero-float-b" : "hero-float-c"
