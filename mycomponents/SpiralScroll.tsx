@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMotionValueEvent, useScroll } from "motion/react";
+import { useMotionValueEvent, useScroll, useSpring } from "motion/react";
 
 const TOTAL_FRAMES = 101; // Editable
 const FRAME_PATH = "/mycomponents";
@@ -25,8 +25,8 @@ export default function SpiralScroll({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imagesRef = useRef<HTMLImageElement[]>([]);
   const rafRef = useRef<number | null>(null);
-  const queuedFrameRef = useRef<number | null>(null);
-  const currentFrameRef = useRef(-1);
+  const queuedProgressRef = useRef<number | null>(null);
+  const currentProgressRef = useRef(-1);
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -34,25 +34,20 @@ export default function SpiralScroll({
     target: sectionRef,
     offset: ["start start", "end end"],
   });
+  const smoothProgress = useSpring(scrollYProgress, {
+    stiffness: 120,
+    damping: 26,
+    mass: 0.22,
+    restDelta: 0.0005,
+  });
 
-  const drawFrame = useCallback((frameIndex: number) => {
+  const drawCoverImage = useCallback((context: CanvasRenderingContext2D, image: HTMLImageElement, alpha = 1) => {
     const canvas = canvasRef.current;
-    const image = imagesRef.current[frameIndex];
-    if (!canvas || !image) return;
-
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    if (!canvas) return;
 
     const cssWidth = canvas.clientWidth;
     const cssHeight = canvas.clientHeight;
     if (!cssWidth || !cssHeight) return;
-
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = BG_COLOR;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
 
     const scale = Math.max(cssWidth / image.naturalWidth, cssHeight / image.naturalHeight);
     const drawWidth = image.naturalWidth * scale;
@@ -60,8 +55,10 @@ export default function SpiralScroll({
     const x = (cssWidth - drawWidth) / 2;
     const y = (cssHeight - drawHeight) / 2;
 
+    context.globalAlpha = alpha;
     context.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
     context.drawImage(image, x, y, drawWidth, drawHeight);
+    context.globalAlpha = 1;
   }, []);
 
   const resolveLoadedFrame = useCallback(
@@ -81,23 +78,63 @@ export default function SpiralScroll({
     [totalFrames]
   );
 
-  const queueDraw = useCallback((frameIndex: number) => {
-    queuedFrameRef.current = frameIndex;
+  const drawProgress = useCallback(
+    (frameProgress: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const context = canvas.getContext("2d");
+      if (!context) return;
+
+      const baseFrame = Math.max(0, Math.min(totalFrames - 1, Math.floor(frameProgress)));
+      const nextFrame = Math.min(totalFrames - 1, baseFrame + 1);
+      const mix = frameProgress - baseFrame;
+      const baseResolved = resolveLoadedFrame(baseFrame);
+      const nextResolved = resolveLoadedFrame(nextFrame);
+
+      if (baseResolved < 0 && nextResolved < 0) return;
+
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = BG_COLOR;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (baseResolved >= 0 && nextResolved >= 0 && baseResolved !== nextResolved) {
+        const baseImage = imagesRef.current[baseResolved];
+        const nextImage = imagesRef.current[nextResolved];
+        if (baseImage && nextImage) {
+          drawCoverImage(context, baseImage, 1 - mix);
+          drawCoverImage(context, nextImage, mix);
+          return;
+        }
+      }
+
+      const fallback = baseResolved >= 0 ? baseResolved : nextResolved;
+      if (fallback >= 0) {
+        const fallbackImage = imagesRef.current[fallback];
+        if (fallbackImage) drawCoverImage(context, fallbackImage, 1);
+      }
+    },
+    [drawCoverImage, resolveLoadedFrame, totalFrames]
+  );
+
+  const queueDraw = useCallback((frameProgress: number) => {
+    queuedProgressRef.current = frameProgress;
     if (rafRef.current !== null) return;
 
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
-      const nextFrame = queuedFrameRef.current;
-      queuedFrameRef.current = null;
-      if (nextFrame === null) return;
+      const nextProgress = queuedProgressRef.current;
+      queuedProgressRef.current = null;
+      if (nextProgress === null) return;
+      if (Math.abs(nextProgress - currentProgressRef.current) < 0.015) return;
 
-      const resolvedFrame = resolveLoadedFrame(nextFrame);
-      if (resolvedFrame < 0 || resolvedFrame === currentFrameRef.current) return;
-
-      currentFrameRef.current = resolvedFrame;
-      drawFrame(resolvedFrame);
+      currentProgressRef.current = nextProgress;
+      drawProgress(nextProgress);
     });
-  }, [drawFrame, resolveLoadedFrame]);
+  }, [drawProgress]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -159,7 +196,7 @@ export default function SpiralScroll({
       const height = canvas.clientHeight;
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
-      queueDraw(Math.max(0, currentFrameRef.current));
+      queueDraw(Math.max(0, currentProgressRef.current));
     };
 
     resizeCanvas();
@@ -167,10 +204,10 @@ export default function SpiralScroll({
     return () => window.removeEventListener("resize", resizeCanvas);
   }, [isReady, queueDraw]);
 
-  useMotionValueEvent(scrollYProgress, "change", (value) => {
+  useMotionValueEvent(smoothProgress, "change", (value) => {
     if (!isReady) return;
-    const index = Math.max(0, Math.min(totalFrames - 1, Math.round(value * (totalFrames - 1))));
-    queueDraw(index);
+    const normalized = Math.max(0, Math.min(1, value));
+    queueDraw(normalized * (totalFrames - 1));
   });
 
   return (
