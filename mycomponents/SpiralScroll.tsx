@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMotionValueEvent, useScroll } from "motion/react";
 
 const TOTAL_FRAMES = 101; // Editable
@@ -28,13 +28,14 @@ export default function SpiralScroll({
   const queuedFrameRef = useRef<number | null>(null);
   const currentFrameRef = useRef(-1);
   const [isReady, setIsReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start start", "end end"],
   });
 
-  const drawFrame = (frameIndex: number) => {
+  const drawFrame = useCallback((frameIndex: number) => {
     const canvas = canvasRef.current;
     const image = imagesRef.current[frameIndex];
     if (!canvas || !image) return;
@@ -61,9 +62,26 @@ export default function SpiralScroll({
 
     context.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
     context.drawImage(image, x, y, drawWidth, drawHeight);
-  };
+  }, []);
 
-  const queueDraw = (frameIndex: number) => {
+  const resolveLoadedFrame = useCallback(
+    (targetFrame: number) => {
+      if (imagesRef.current[targetFrame]) return targetFrame;
+
+      for (let distance = 1; distance < totalFrames; distance += 1) {
+        const before = targetFrame - distance;
+        if (before >= 0 && imagesRef.current[before]) return before;
+
+        const after = targetFrame + distance;
+        if (after < totalFrames && imagesRef.current[after]) return after;
+      }
+
+      return -1;
+    },
+    [totalFrames]
+  );
+
+  const queueDraw = useCallback((frameIndex: number) => {
     queuedFrameRef.current = frameIndex;
     if (rafRef.current !== null) return;
 
@@ -71,43 +89,64 @@ export default function SpiralScroll({
       rafRef.current = null;
       const nextFrame = queuedFrameRef.current;
       queuedFrameRef.current = null;
-      if (nextFrame === null || nextFrame === currentFrameRef.current) return;
+      if (nextFrame === null) return;
 
-      currentFrameRef.current = nextFrame;
-      drawFrame(nextFrame);
+      const resolvedFrame = resolveLoadedFrame(nextFrame);
+      if (resolvedFrame < 0 || resolvedFrame === currentFrameRef.current) return;
+
+      currentFrameRef.current = resolvedFrame;
+      drawFrame(resolvedFrame);
     });
-  };
+  }, [drawFrame, resolveLoadedFrame]);
 
   useEffect(() => {
     let isCancelled = false;
 
-    const preload = async () => {
-      const loaders = Array.from({ length: totalFrames }, (_, i) => {
-        return new Promise<HTMLImageElement>((resolve, reject) => {
-          const img = new Image();
-          img.decoding = "async";
-          img.src = frameSrc(i);
-          img.onload = () => resolve(img);
-          img.onerror = () => reject(new Error(`Failed to load frame ${i + 1}`));
-        });
+    const loadFrame = (index: number) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = frameSrc(index);
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`Failed to load frame ${index + 1}`));
       });
 
-      const loaded = await Promise.all(loaders);
-      if (isCancelled) return;
+    const preload = async () => {
+      try {
+        const first = await loadFrame(0);
+        if (isCancelled) return;
 
-      imagesRef.current = loaded;
-      setIsReady(true);
+        imagesRef.current[0] = first;
+        setIsReady(true);
+        queueDraw(0);
+      } catch {
+        if (!isCancelled) setHasError(true);
+        return;
+      }
+
+      const backgroundLoads = Array.from({ length: totalFrames - 1 }, (_, idx) => idx + 1).map(
+        async (index) => {
+          try {
+            const image = await loadFrame(index);
+            if (!isCancelled) imagesRef.current[index] = image;
+          } catch {
+            // Skip missing/corrupt frames and keep animation usable.
+          }
+        }
+      );
+
+      await Promise.allSettled(backgroundLoads);
     };
 
     preload().catch(() => {
-      if (!isCancelled) setIsReady(false);
+      if (!isCancelled) setHasError(true);
     });
 
     return () => {
       isCancelled = true;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [totalFrames]);
+  }, [queueDraw, totalFrames]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -126,7 +165,7 @@ export default function SpiralScroll({
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
     return () => window.removeEventListener("resize", resizeCanvas);
-  }, [isReady]);
+  }, [isReady, queueDraw]);
 
   useMotionValueEvent(scrollYProgress, "change", (value) => {
     if (!isReady) return;
@@ -145,7 +184,11 @@ export default function SpiralScroll({
             isReady ? "opacity-0" : "opacity-100"
           }`}
         >
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-500" />
+          {hasError ? (
+            <p className="text-xs font-semibold tracking-[0.14em] text-zinc-500">LOADING PREVIEW...</p>
+          ) : (
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-500" />
+          )}
         </div>
       </div>
     </section>
